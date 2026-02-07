@@ -1,5 +1,4 @@
-# AXI Stereo Delay (FPGA Reference Implementation)
-
+# Simple Delay Module (AXI-Stream) on FPGA
 This repository provides a **reference RTL implementation** of a
 **stereo audio delay stage**
 implemented in **Verilog** and integrated with **AXI-Stream** and **AXI-Lite**.
