@@ -17,9 +17,9 @@ module tb_delay_core;
     // ------------------------------------------------------------------------
     // Parameters
     // ------------------------------------------------------------------------
-    parameter DATA_W      = 16;
-    parameter ADDR_W      = 8;   // 2^8 = 256 samples (sufficient for simulation)
-    parameter CLK_PERIOD  = 20;  // 50 MHz clock
+    parameter integer DATA_W      = 16;
+    parameter integer ADDR_W      = 8;   // 2^8 = 256 samples (sufficient for simulation)
+    parameter integer CLK_PERIOD  = 20;  // 50 MHz clock
 
     // ------------------------------------------------------------------------
     // DUT Signals
@@ -62,6 +62,7 @@ module tb_delay_core;
     // ------------------------------------------------------------------------
     // Clock Generation
     // ------------------------------------------------------------------------
+    initial clk = 1'b0;
     always #(CLK_PERIOD/2) clk = ~clk;
 
     // ------------------------------------------------------------------------
@@ -77,8 +78,13 @@ module tb_delay_core;
             if (rst_n) begin
                 $fdisplay(
                     file_h,
-                    "%t,%d,%d,%d,%d,%b",
-                    $time, din, dout, base_delay, mod_val, bypass
+                    "%0d,%0d,%0d,%0d,%0d,%b",
+                    $time,
+                    $signed(din),
+                    $signed(dout),
+                    base_delay,
+                    $signed(mod_val),
+                    bypass
                 );
             end
         end
@@ -95,19 +101,18 @@ module tb_delay_core;
         // --------------------------------------------------------------------
         // Initialization
         // --------------------------------------------------------------------
-        clk   = 0;
-        rst_n = 0;
-        en    = 1;
-        bypass = 0;
-        i     = 0;
+        rst_n      = 1'b0;
+        en         = 1'b1;
+        bypass     = 1'b0;
+        i          = 0;
         
         // Default delay configuration
         base_delay = 8'd50;   // 50 samples base delay
         mod_val    = 16'sd0;  // No modulation
-        din        = 0;
+        din        = 16'sd0;
 
         #(CLK_PERIOD * 5);
-        rst_n = 1;
+        rst_n = 1'b1;
         #(CLK_PERIOD * 5);
 
         // --------------------------------------------------------------------
@@ -118,7 +123,7 @@ module tb_delay_core;
         $display("TEST 1: Impulse Response (Static Delay)");
         din = 16'sd10000;
         @(posedge clk);
-        din = 0;
+        din = 16'sd0;
         #(CLK_PERIOD * 100);
 
         // --------------------------------------------------------------------
@@ -131,7 +136,7 @@ module tb_delay_core;
         freq = 0.05;
         for (i = 0; i < 100; i = i + 1) begin
             phi = 2.0 * 3.14159 * freq * i;
-            din = $signed(16'sd8000 * $sin(phi));
+            din = $rtoi(8000.0 * $sin(phi));
             @(posedge clk);
         end
 
@@ -145,19 +150,19 @@ module tb_delay_core;
         for (i = 0; i < 200; i = i + 1) begin
             // Audio signal
             phi = 2.0 * 3.14159 * freq * i;
-            din = $signed(16'sd8000 * $sin(phi));
+            din = $rtoi(8000.0 * $sin(phi));
             
             // Simple triangle-like modulation
             if (i < 50)
-                mod_val = mod_val + 1;
+                mod_val = mod_val + 16'sd1;
             else if (i < 150)
-                mod_val = mod_val - 1;
+                mod_val = mod_val - 16'sd1;
             else
-                mod_val = mod_val + 1;
+                mod_val = mod_val + 16'sd1;
             
             @(posedge clk);
         end
-        mod_val = 0;
+        mod_val = 16'sd0;
 
         // --------------------------------------------------------------------
         // TEST 4: Boundary / Saturation Check
@@ -168,7 +173,7 @@ module tb_delay_core;
         mod_val = -16'sd100;  // base_delay + mod_val < 0
         din     = 16'sd20000;
         @(posedge clk);
-        din = 0;
+        din = 16'sd0;
         #(CLK_PERIOD * 20);
 
         // --------------------------------------------------------------------
@@ -177,10 +182,10 @@ module tb_delay_core;
         // Expectation:
         // - Output follows input directly
         $display("TEST 5: Bypass Mode");
-        bypass = 1;
+        bypass = 1'b1;
         din = 16'sd5000;
         @(posedge clk);
-        din = 0;
+        din = 16'sd0;
         #(CLK_PERIOD * 10);
 
         // --------------------------------------------------------------------
