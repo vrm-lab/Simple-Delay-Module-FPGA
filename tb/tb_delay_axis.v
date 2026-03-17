@@ -19,10 +19,10 @@ module tb_delay_axis;
     // =========================================================================
     // PARAMETERS
     // =========================================================================
-    parameter CLK_PERIOD = 10;  // 100 MHz
-    parameter AXIS_WIDTH = 32;
-    parameter ADDR_WIDTH = 4;
-    parameter AUDIO_W    = 16;
+    parameter integer CLK_PERIOD = 10;  // 100 MHz
+    parameter integer AXIS_WIDTH = 32;
+    parameter integer ADDR_WIDTH = 4;
+    parameter integer AUDIO_W    = 16;
     
     // =========================================================================
     // SIGNALS
@@ -113,10 +113,8 @@ module tb_delay_axis;
     // =========================================================================
     // CLOCK GENERATION
     // =========================================================================
-    initial begin
-        aclk = 0;
-        forever #(CLK_PERIOD/2) aclk = ~aclk;
-    end
+    initial aclk = 1'b0;
+    always #(CLK_PERIOD/2) aclk = ~aclk;
 
     // =========================================================================
     // FILE LOGGING (CSV OUTPUT)
@@ -130,20 +128,19 @@ module tb_delay_axis;
     // -------------------------------------------------------------------------
     // Runtime Monitor
     // -------------------------------------------------------------------------
-    shortint in_L, in_R, out_L, out_R;
     always @(posedge aclk) begin
         if (aresetn) begin
-            in_L  = s_axis_tdata[15:0];
-            in_R  = s_axis_tdata[31:16];
-            out_L = m_axis_tdata[15:0];
-            out_R = m_axis_tdata[31:16];
-            
             // Log only when stream activity exists
             if (s_axis_tvalid || m_axis_tvalid) begin
                 $fwrite(
                     f,
                     "%0d,%0d,%0d,%0d,%0d,%0d\n",
-                    $time, in_L, in_R, out_L, out_R, m_axis_tvalid
+                    $time, 
+                    $signed(s_axis_tdata[15:0]), 
+                    $signed(s_axis_tdata[31:16]), 
+                    $signed(m_axis_tdata[15:0]), 
+                    $signed(m_axis_tdata[31:16]), 
+                    m_axis_tvalid
                 );
             end
         end
@@ -153,24 +150,26 @@ module tb_delay_axis;
     // AXI-LITE WRITE TASK
     // =========================================================================
     // Simple blocking write transaction (single-beat)
-    task write_reg(input [3:0] addr, input [31:0] data);
+    task write_reg;
+        input [ADDR_WIDTH-1:0] addr;
+        input [31:0]           data;
         begin
             @(posedge aclk);
             s_axi_awaddr  <= addr;
-            s_axi_awvalid <= 1;
+            s_axi_awvalid <= 1'b1;
             s_axi_wdata   <= data;
             s_axi_wstrb   <= 4'hF; // Enable all bytes
-            s_axi_wvalid  <= 1;
-            s_axi_bready  <= 1;
+            s_axi_wvalid  <= 1'b1;
+            s_axi_bready  <= 1'b1;
 
             wait(s_axi_awready && s_axi_wready);
             @(posedge aclk);
-            s_axi_awvalid <= 0;
-            s_axi_wvalid  <= 0;
+            s_axi_awvalid <= 1'b0;
+            s_axi_wvalid  <= 1'b0;
 
             wait(s_axi_bvalid);
             @(posedge aclk);
-            s_axi_bready  <= 0;
+            s_axi_bready  <= 1'b0;
         end
     endtask
 
@@ -179,40 +178,40 @@ module tb_delay_axis;
     // =========================================================================
     // Left  channel: faster sine
     // Right channel: slower sine
-    real     pi = 3.14159265;
-    real     amplitude = 30000.0;
-    integer  i;
-    shortint sine_val_L;
-    shortint sine_val_R;
+    real             pi = 3.14159265;
+    real             amplitude = 30000.0;
+    integer          i;
+    reg signed [15:0] sine_val_L;
+    reg signed [15:0] sine_val_R;
     
     initial begin
         // ---------------------------------------------------------------------
         // Initialization
         // ---------------------------------------------------------------------
-        aresetn = 0;
+        aresetn = 1'b0;
         i = 0;
 
-        s_axis_tvalid = 0;
-        s_axis_tdata  = 0;
-        s_axis_tlast  = 0;
-        m_axis_tready = 1;
+        s_axis_tvalid = 1'b0;
+        s_axis_tdata  = 32'd0;
+        s_axis_tlast  = 1'b0;
+        m_axis_tready = 1'b1;
 
-        s_axi_awaddr  = 0;
-        s_axi_awvalid = 0;
-        s_axi_wdata   = 0;
-        s_axi_wstrb   = 0;
-        s_axi_wvalid  = 0;
-        s_axi_bready  = 0;
+        s_axi_awaddr  = 4'd0;
+        s_axi_awvalid = 1'b0;
+        s_axi_wdata   = 32'd0;
+        s_axi_wstrb   = 4'd0;
+        s_axi_wvalid  = 1'b0;
+        s_axi_bready  = 1'b0;
 
-        s_axi_araddr  = 0;
-        s_axi_arvalid = 0;
-        s_axi_rready  = 0;
+        s_axi_araddr  = 4'd0;
+        s_axi_arvalid = 1'b0;
+        s_axi_rready  = 1'b0;
 
         // ---------------------------------------------------------------------
         // Reset Sequence
         // ---------------------------------------------------------------------
         #(CLK_PERIOD * 10);
-        aresetn = 1;
+        aresetn = 1'b1;
         #(CLK_PERIOD * 20);
 
         // ---------------------------------------------------------------------
@@ -235,7 +234,7 @@ module tb_delay_axis;
         // Right : Period = 100 samples
         for (i = 0; i < 500; i = i + 1) begin
             @(posedge aclk);
-            s_axis_tvalid <= 1;
+            s_axis_tvalid <= 1'b1;
 
             sine_val_L = $rtoi(amplitude * $sin(2.0 * pi * i / 50.0));
             sine_val_R = $rtoi(amplitude * $sin(2.0 * pi * i / 100.0));
@@ -248,14 +247,14 @@ module tb_delay_axis;
         // ---------------------------------------------------------------------
         repeat(150) begin
             @(posedge aclk);
-            s_axis_tvalid <= 1;
-            s_axis_tdata  <= 0;
+            s_axis_tvalid <= 1'b1;
+            s_axis_tdata  <= 32'd0;
         end
         
-        s_axis_tvalid <= 0;
-        s_axis_tlast  <= 1;
+        s_axis_tvalid <= 1'b0;
+        s_axis_tlast  <= 1'b1;
         @(posedge aclk);
-        s_axis_tlast  <= 0;
+        s_axis_tlast  <= 1'b0;
 
         // ---------------------------------------------------------------------
         // Finish Simulation
